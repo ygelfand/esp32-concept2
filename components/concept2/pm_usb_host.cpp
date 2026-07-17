@@ -6,6 +6,7 @@
 
 #include "esphome/core/log.h"
 
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -36,6 +37,11 @@ bool PmUsbHost::begin(int task_core) {
   err = usb_host_lib_set_root_port_power(true);
   if (err != ESP_OK)
     ESP_LOGW(TAG, "set_root_port_power(true) not supported here: %s", esp_err_to_name(err));
+
+  esp_log_level_set("USBH", ESP_LOG_DEBUG);
+  esp_log_level_set("HUB", ESP_LOG_DEBUG);
+  esp_log_level_set("ENUM", ESP_LOG_DEBUG);
+  esp_log_level_set("HCD", ESP_LOG_DEBUG);
 
   const usb_host_client_config_t client_cfg = {
       .is_synchronous = false,
@@ -84,14 +90,18 @@ void PmUsbHost::client_event_cb(const usb_host_client_event_msg_t *msg, void *ar
 void PmUsbHost::on_client_event(const usb_host_client_event_msg_t *msg) {
   switch (msg->event) {
     case USB_HOST_CLIENT_EVENT_NEW_DEV:
+      ESP_LOGD(TAG, "client event NEW_DEV: device enumerated at address %u",
+               msg->new_dev.address);
       if (this->dev_ == nullptr)
         this->open_device_(msg->new_dev.address);
       break;
     case USB_HOST_CLIENT_EVENT_DEV_GONE:
+      ESP_LOGD(TAG, "client event DEV_GONE");
       if (msg->dev_gone.dev_hdl == this->dev_)
         this->dev_gone_ = true;
       break;
     default:
+      ESP_LOGD(TAG, "client event %d", (int) msg->event);
       break;
   }
 }

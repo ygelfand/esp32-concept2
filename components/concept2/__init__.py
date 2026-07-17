@@ -79,5 +79,6 @@ async def to_code(config):
     #  - Longer reset hold/recovery gives slow full-speed devices more settle
     #    time during enumeration.
     esp32.add_idf_sdkconfig_option("CONFIG_USB_HOST_HUBS_SUPPORTED", True)
+    esp32.add_idf_sdkconfig_option("CONFIG_USB_HOST_DEBOUNCE_DELAY_MS", 2000)
     esp32.add_idf_sdkconfig_option("CONFIG_USB_HOST_RESET_HOLD_MS", 50)
-    esp32.add_idf_sdkconfig_option("CONFIG_USB_HOST_RESET_RECOVERY_MS", 50)
+    esp32.add_idf_sdkconfig_option("CONFIG_USB_HOST_RESET_RECOVERY_MS", 200)
