@@ -38,10 +38,12 @@ bool PmUsbHost::begin(int task_core) {
   if (err != ESP_OK)
     ESP_LOGW(TAG, "set_root_port_power(true) not supported here: %s", esp_err_to_name(err));
 
-  esp_log_level_set("USBH", ESP_LOG_DEBUG);
-  esp_log_level_set("HUB", ESP_LOG_DEBUG);
-  esp_log_level_set("ENUM", ESP_LOG_DEBUG);
-  esp_log_level_set("HCD", ESP_LOG_DEBUG);
+  esp_log_level_set("USBH", ESP_LOG_VERBOSE);
+  esp_log_level_set("HUB", ESP_LOG_VERBOSE);
+  esp_log_level_set("ENUM", ESP_LOG_VERBOSE);
+  esp_log_level_set("HCD", ESP_LOG_VERBOSE);
+  esp_log_level_set("USB-OTG", ESP_LOG_VERBOSE);
+  esp_log_level_set("CDC_ACM", ESP_LOG_VERBOSE);
 
   const usb_host_client_config_t client_cfg = {
       .is_synchronous = false,
