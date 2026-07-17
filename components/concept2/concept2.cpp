@@ -52,6 +52,19 @@ void Concept2Component::loop() {
 
   this->update_derived_(m);
 
+  // Throttled bring-up log so decoded metrics are observable on the console.
+  uint32_t now = millis();
+  if (now - this->last_log_ms_ >= 1000) {
+    this->last_log_ms_ = now;
+    ESP_LOGD(TAG,
+             "dist=%.1fm pace=%us/500m power=%dW rate=%.0fspm hr=%u cal=%u "
+             "t=%us stroke=%u workout=%u drag=%u",
+             m.total_distance_m, m.inst_pace_s500, m.inst_power_w, m.stroke_rate_spm,
+             m.heart_rate_bpm, m.total_energy_kcal, m.elapsed_time_s,
+             static_cast<unsigned>(m.stroke_state), static_cast<unsigned>(m.workout_state),
+             m.drag_factor);
+  }
+
   if (this->enable_ble_)
     this->ble_.publish(m);
   if (this->dircon_enabled_)
