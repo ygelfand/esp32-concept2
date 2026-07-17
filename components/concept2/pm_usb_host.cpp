@@ -29,6 +29,14 @@ bool PmUsbHost::begin(int task_core) {
     return false;
   }
 
+  // Explicitly assert root-port power. On boards that gate the native port's
+  // VBUS via the host controller this turns VBUS on; on boards with VBUS
+  // hard-wired to the 5V rail it is a harmless no-op. If VBUS never reaches the
+  // PM the device won't wake / won't enumerate (CHECK_SHORT_DEV_DESC FAILED).
+  err = usb_host_lib_set_root_port_power(true);
+  if (err != ESP_OK)
+    ESP_LOGW(TAG, "set_root_port_power(true) not supported here: %s", esp_err_to_name(err));
+
   const usb_host_client_config_t client_cfg = {
       .is_synchronous = false,
       .max_num_event_msg = 5,
