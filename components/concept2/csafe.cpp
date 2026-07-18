@@ -6,16 +6,24 @@ namespace csafe {
 
 namespace {
 
-// Commands sent every poll cycle. Public GETHRCUR for current heart rate, plus
-// the 0x1A-wrapped proprietary high-resolution getters (little-endian values,
-// per PM3Monitor / mbottini working implementations). A large reply may span
-// several 120-byte frames; the caller reassembles complete F1..F2 frames.
-const uint8_t POLL_CONTENTS[] = {
-    CMD_PROP_WRAPPER, 3,
-    PM_GET_WORKTIME,
-    PM_GET_WORKDISTANCE,
-    PM_GET_STROKERATE,
+// Rotating poll blocks, each a small group of proprietary getters wrapped in
+// 0x1A. The caller cycles through them one per poll.
+const uint8_t BLK_TIME_DIST[] = {PM_GET_WORKTIME, PM_GET_WORKDISTANCE};
+const uint8_t BLK_PACE_POWER[] = {PM_GET_STROKE_500MPACE, PM_GET_STROKE_POWER};
+const uint8_t BLK_RATE_STATE[] = {PM_GET_STROKERATE, PM_GET_STROKESTATE};
+const uint8_t BLK_DRAG_WORKOUT[] = {PM_GET_DRAGFACTOR, PM_GET_WORKOUTSTATE};
+
+struct PollBlock {
+  const uint8_t *cmds;
+  uint8_t count;
 };
+const PollBlock POLL_BLOCKS[] = {
+    {BLK_TIME_DIST, 2},
+    {BLK_PACE_POWER, 2},
+    {BLK_RATE_STATE, 2},
+    {BLK_DRAG_WORKOUT, 2},
+};
+const size_t NUM_POLL_BLOCKS = sizeof(POLL_BLOCKS) / sizeof(POLL_BLOCKS[0]);
 
 inline uint32_t le32(const uint8_t *p) {
   return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8) |
@@ -146,8 +154,17 @@ size_t build_frame(const uint8_t *contents, size_t contents_len, uint8_t *out, s
   return n;
 }
 
-size_t build_poll_frame(uint8_t *out, size_t out_cap) {
-  return build_frame(POLL_CONTENTS, sizeof(POLL_CONTENTS), out, out_cap);
+size_t poll_block_count() { return NUM_POLL_BLOCKS; }
+
+size_t build_poll_frame(size_t block_index, uint8_t *out, size_t out_cap) {
+  const PollBlock &b = POLL_BLOCKS[block_index % NUM_POLL_BLOCKS];
+  uint8_t contents[16];
+  size_t n = 0;
+  contents[n++] = CMD_PROP_WRAPPER;
+  contents[n++] = b.count;
+  for (uint8_t i = 0; i < b.count; i++)
+    contents[n++] = b.cmds[i];
+  return build_frame(contents, n, out, out_cap);
 }
 
 bool parse_response(const uint8_t *frame, size_t len, RowingMetrics &m) {

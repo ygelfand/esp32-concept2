@@ -34,7 +34,8 @@ void Concept2Component::update() {
   if (!this->usb_.connected())
     return;
   uint8_t frame[96];
-  size_t n = csafe::build_poll_frame(frame, sizeof(frame));
+  size_t n = csafe::build_poll_frame(this->poll_index_, frame, sizeof(frame));
+  this->poll_index_ = (this->poll_index_ + 1) % csafe::poll_block_count();
   if (n == 0)
     return;
   bool sent = this->usb_.write_frame(frame, n);

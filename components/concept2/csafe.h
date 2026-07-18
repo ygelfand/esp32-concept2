@@ -61,10 +61,14 @@ constexpr uint8_t PM_GET_STROKERATE = 0xB3;       // strokes/min
 constexpr uint8_t PM_GET_STROKE_500MPACE = 0xA8;  // sec/500m
 constexpr uint8_t PM_GET_STROKE_POWER = 0xA9;     // watts
 
-// Build the standard periodic poll frame (F1 .. F2, stuffed, with report data
-// but WITHOUT the leading HID report-ID byte). Returns the number of bytes
-// written to `out`, or 0 if `out_cap` is too small.
-size_t build_poll_frame(uint8_t *out, size_t out_cap);
+// Number of rotating poll blocks. The caller cycles `block_index` 0..count-1 so
+// each poll requests only a few proprietary getters (the PM's reply wrapper
+// mangles/over-runs if too many are batched at once).
+size_t poll_block_count();
+
+// Build poll frame for `block_index` (F1 .. F2, stuffed, WITHOUT the leading HID
+// report-ID byte). Returns bytes written to `out`, or 0 if `out_cap` too small.
+size_t build_poll_frame(size_t block_index, uint8_t *out, size_t out_cap);
 
 // Build an arbitrary standard frame from raw command `contents`. Handles
 // checksum + byte-stuffing + start/stop flags. Returns bytes written, or 0.
