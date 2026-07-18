@@ -39,6 +39,9 @@ constexpr uint8_t FRAME_STUFF = 0xF3;
 
 // Public CSAFE commands we send (all short commands).
 constexpr uint8_t CMD_GETSTATUS = 0x80;
+constexpr uint8_t CMD_RESET = 0x81;        // reset the PM / workout
+constexpr uint8_t CMD_GOIDLE = 0x82;       // send PM to the Idle state
+constexpr uint8_t CMD_GOFINISHED = 0x86;   // send PM to the Finished state
 constexpr uint8_t CMD_GETTWORK = 0xA0;       // elapsed time, H:M:S
 constexpr uint8_t CMD_GETHORIZONTAL = 0xA1;  // distance, meters
 constexpr uint8_t CMD_GETCALORIES = 0xA3;    // total kcal

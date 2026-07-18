@@ -14,6 +14,7 @@ static const char *const TAG = "concept2";
 void Concept2Component::setup() {
   if (this->pause_button_ != nullptr)
     this->pause_button_->setup();
+  this->last_activity_ms_ = millis();
 #ifdef USE_ESP_IDF
   this->usb_.set_frame_callback(
       [this](const uint8_t *data, size_t len) { this->on_frame_(data, len); });
@@ -54,17 +55,37 @@ void Concept2Component::send_next_poll_() {
 
 void Concept2Component::loop() {
 #ifdef USE_ESP_IDF
-  // Pause button: toggle polling on a debounced press (boot button is active-low).
+  uint32_t nowm = millis();
+
+  // Multi-tap button: count debounced presses within a window, then act
+  // (1 = pause, 2 = reset workout, 3 = sleep, any tap while asleep = wake).
   if (this->pause_button_ != nullptr) {
-    bool pressed = !this->pause_button_->digital_read();
-    uint32_t bnow = millis();
-    if (pressed && !this->button_prev_ && (bnow - this->last_button_ms_ > 250)) {
-      this->last_button_ms_ = bnow;
-      this->toggle_active();
-      ESP_LOGI(TAG, "pause button: polling %s", this->active_ ? "resumed" : "paused");
+    bool pressed = !this->pause_button_->digital_read();  // boot button is active-low
+    if (pressed && !this->button_prev_ && (nowm - this->last_button_ms_ > 60)) {
+      this->last_button_ms_ = nowm;
+      this->last_tap_ms_ = nowm;
+      this->last_activity_ms_ = nowm;
+      this->tap_count_++;
     }
     this->button_prev_ = pressed;
+    if (this->tap_count_ > 0 && (nowm - this->last_tap_ms_ > 400)) {
+      this->handle_taps_(this->tap_count_);
+      this->tap_count_ = 0;
+    }
   }
+
+  // Track (re)connection so the sleep timer starts fresh when a PM attaches.
+  bool conn = this->usb_.connected();
+  if (conn && !this->was_connected_)
+    this->last_activity_ms_ = nowm;
+  this->was_connected_ = conn;
+
+  // Auto-sleep: after the timeout with no rowing/button activity, drop the port.
+  if (!this->sleeping_ && conn && this->sleep_timeout_ms_ > 0 &&
+      (nowm - this->last_activity_ms_ > this->sleep_timeout_ms_) &&
+      (!this->active_ || this->autosleep_on_idle_))
+    this->enter_sleep_();
+
 #ifdef USE_LIGHT
   this->update_status_led_();
 #endif
@@ -72,10 +93,9 @@ void Concept2Component::loop() {
   // Synchronous poll cycle: send the next block only once the previous reply has
   // been parsed (awaiting_ cleared), honoring a min inter-frame gap; resend on
   // timeout so a silent block can't stall the rotation.
-  if (this->usb_.connected() && this->active_) {
-    uint32_t pn = millis();
-    if ((pn - this->last_poll_ms_ >= 50) &&
-        (!this->awaiting_ || (pn - this->last_poll_ms_ > 300)))
+  if (conn && this->active_ && !this->sleeping_) {
+    if ((nowm - this->last_poll_ms_ >= 50) &&
+        (!this->awaiting_ || (nowm - this->last_poll_ms_ > 300)))
       this->send_next_poll_();
   }
 
@@ -89,13 +109,15 @@ void Concept2Component::loop() {
   portEXIT_CRITICAL(&this->mux_);
 
   this->update_derived_(m);
-#ifdef USE_LIGHT
   // "Rowing" = the PM is in an active stroke phase (power lingers as the wheel
-  // coasts, so it's a poor signal). Hold green ~3 s past the last stroke so it
-  // doesn't flicker between strokes, then decay to amber when actually stopped.
+  // coasts, so it's a poor signal). Feeds both the LED hold and the sleep timer.
   bool active_stroke = m.stroke_state == StrokeState::DRIVING ||
                        m.stroke_state == StrokeState::DWELLING ||
                        m.stroke_state == StrokeState::RECOVERY;
+  if (active_stroke)
+    this->last_activity_ms_ = millis();
+#ifdef USE_LIGHT
+  // Hold green ~3 s past the last stroke so it doesn't flicker between strokes.
   if (active_stroke)
     this->last_active_ms_ = millis();
   this->led_rowing_ = (millis() - this->last_active_ms_) < 3000;
@@ -189,7 +211,60 @@ void Concept2Component::update_derived_(RowingMetrics &m) {
     m.energy_per_min_kcal = static_cast<uint8_t>(per_min > 255.0f ? 255.0f : per_min);
   }
 }
+
+void Concept2Component::send_command_(uint8_t cmd) {
+  uint8_t contents[1] = {cmd};
+  uint8_t frame[8];
+  size_t n = csafe::build_frame(contents, 1, frame, sizeof(frame));
+  if (n > 0)
+    this->usb_.write_frame(frame, n);
+}
+
+void Concept2Component::reset_workout_() {
+  ESP_LOGI(TAG, "reset workout");
+  this->send_command_(csafe::CMD_RESET);
+}
+
+void Concept2Component::enter_sleep_() {
+  ESP_LOGI(TAG, "sleep: finish + drop port");
+  this->send_command_(csafe::CMD_GOFINISHED);
+  this->usb_.set_bus_power(false);
+  this->sleeping_ = true;
+}
+
+void Concept2Component::wake_() {
+  ESP_LOGI(TAG, "wake: power port");
+  this->usb_.set_bus_power(true);
+  this->sleeping_ = false;
+  this->last_activity_ms_ = millis();
+}
+
+void Concept2Component::handle_taps_(uint8_t count) {
+  if (this->sleeping_) {
+    this->wake_();
+    return;
+  }
+  switch (count) {
+    case 1:
+      this->toggle_active();
+      ESP_LOGI(TAG, "polling %s", this->active_ ? "resumed" : "paused");
+      break;
+    case 2:
+      this->reset_workout_();
+      break;
+    default:  // 3 or more taps
+      this->enter_sleep_();
+      break;
+  }
+}
 #endif  // USE_ESP_IDF
+
+void Concept2Component::publish_active_() {
+#ifdef USE_SWITCH
+  if (this->active_switch_ != nullptr)
+    this->active_switch_->publish_state(this->active_);
+#endif
+}
 
 #ifdef USE_SENSOR
 void Concept2Component::publish_sensors_(const RowingMetrics &m) {
@@ -235,6 +310,13 @@ void Concept2Component::dump_config() {
 void Concept2Component::update_status_led_() {
   if (this->status_light_ == nullptr)
     return;
+  if (this->sleeping_) {
+    if (this->last_led_status_ == 4)
+      return;
+    this->last_led_status_ = 4;
+    this->status_light_->turn_off().perform();
+    return;
+  }
   int status;
   float r, g, b;
   if (!this->active_) {

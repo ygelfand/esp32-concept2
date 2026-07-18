@@ -14,6 +14,9 @@
 #ifdef USE_LIGHT
 #include "esphome/components/light/light_state.h"
 #endif
+#ifdef USE_SWITCH
+#include "esphome/components/switch/switch.h"
+#endif
 
 #ifdef USE_ESP_IDF
 #include "freertos/FreeRTOS.h"
@@ -26,6 +29,10 @@
 
 namespace esphome {
 namespace concept2 {
+
+#ifdef USE_SWITCH
+class Concept2Switch;
+#endif
 
 // Top-level orchestrator. As a PollingComponent it drives the CSAFE poll cycle
 // on `update_interval`; received frames are parsed off the USB task and the
@@ -45,14 +52,18 @@ class Concept2Component : public PollingComponent {
 
   // Pause/resume CSAFE polling. When paused the PM stops receiving frames and
   // goes to sleep on its own inactivity timeout.
+  // Pause = stop polling only (does not drop the port or reset the workout).
   void set_active(bool active) {
     this->active_ = active;
-#ifdef USE_ESP_IDF
-    this->usb_.set_bus_power(active);  // drop the port when paused so the PM sleeps
-#endif
+    this->publish_active_();
   }
   void toggle_active() { this->set_active(!this->active_); }
   bool is_active() const { return this->active_; }
+  void set_sleep_timeout(uint32_t ms) { this->sleep_timeout_ms_ = ms; }
+  void set_autosleep_on_idle(bool b) { this->autosleep_on_idle_ = b; }
+#ifdef USE_SWITCH
+  void set_active_switch(Concept2Switch *sw) { this->active_switch_ = sw; }
+#endif
 
 #ifdef USE_ESP_IDF
   bool pm_connected() const { return this->usb_.connected(); }
@@ -95,6 +106,24 @@ class Concept2Component : public PollingComponent {
   InternalGPIOPin *pause_button_{nullptr};
   bool button_prev_{false};
   uint32_t last_button_ms_{0};
+  uint8_t tap_count_{0};
+  uint32_t last_tap_ms_{0};
+  uint32_t last_activity_ms_{0};
+  uint32_t sleep_timeout_ms_{120000};
+  bool autosleep_on_idle_{true};
+  bool sleeping_{false};
+  bool was_connected_{false};
+  void publish_active_();
+#ifdef USE_SWITCH
+  Concept2Switch *active_switch_{nullptr};
+#endif
+#ifdef USE_ESP_IDF
+  void handle_taps_(uint8_t count);
+  void enter_sleep_();
+  void wake_();
+  void reset_workout_();
+  void send_command_(uint8_t cmd);
+#endif
 #ifdef USE_LIGHT
   void update_status_led_();
   light::LightState *status_light_{nullptr};
@@ -158,6 +187,18 @@ class Concept2Component : public PollingComponent {
   } derived_;
 #endif
 };
+
+#ifdef USE_SWITCH
+// Native pause switch: reflects and controls the component's active_ state.
+class Concept2Switch : public switch_::Switch {
+ public:
+  void set_parent(Concept2Component *p) { this->parent_ = p; }
+  void write_state(bool state) override { this->parent_->set_active(state); }
+
+ protected:
+  Concept2Component *parent_{nullptr};
+};
+#endif
 
 }  // namespace concept2
 }  // namespace esphome

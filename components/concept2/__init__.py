@@ -22,6 +22,8 @@ CONF_DIRCON = "dircon"
 CONF_ENABLED = "enabled"
 CONF_STATUS_LIGHT = "status_light"
 CONF_PAUSE_BUTTON = "pause_button"
+CONF_SLEEP_TIMEOUT = "sleep_timeout"
+CONF_AUTOSLEEP_ON_IDLE = "autosleep_on_idle"
 
 DIRCON_SCHEMA = cv.Schema(
     {
@@ -39,6 +41,10 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_DIRCON, default={}): DIRCON_SCHEMA,
         cv.Optional(CONF_STATUS_LIGHT): cv.use_id(light.LightState),
         cv.Optional(CONF_PAUSE_BUTTON): pins.internal_gpio_input_pin_schema,
+        cv.Optional(
+            CONF_SLEEP_TIMEOUT, default="2min"
+        ): cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_AUTOSLEEP_ON_IDLE, default=True): cv.boolean,
     }
 ).extend(cv.polling_component_schema("100ms"))
 
@@ -71,6 +77,9 @@ async def to_code(config):
     dircon = config[CONF_DIRCON]
     cg.add(var.set_dircon_enabled(dircon[CONF_ENABLED]))
     cg.add(var.set_dircon_port(dircon[CONF_PORT]))
+
+    cg.add(var.set_sleep_timeout(config[CONF_SLEEP_TIMEOUT]))
+    cg.add(var.set_autosleep_on_idle(config[CONF_AUTOSLEEP_ON_IDLE]))
 
     if CONF_STATUS_LIGHT in config:
         status_light = await cg.get_variable(config[CONF_STATUS_LIGHT])
