@@ -225,8 +225,11 @@ void Concept2Component::send_screenstate_(uint8_t type, uint8_t value) {
   uint8_t contents[] = {csafe::CMD_SETPMCFG, 0x04, csafe::PM_SET_SCREENSTATE, 0x02, type, value};
   uint8_t frame[16];
   size_t n = csafe::build_frame(contents, sizeof(contents), frame, sizeof(frame));
-  if (n > 0)
+  if (n > 0) {
+    ESP_LOGI(TAG, "screenstate TX (type=%u val=%u): %s", type, value,
+             format_hex_pretty(frame, n).c_str());
     this->usb_.write_frame(frame, n);
+  }
 }
 
 void Concept2Component::reset_workout_() {
