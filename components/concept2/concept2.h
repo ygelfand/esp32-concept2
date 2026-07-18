@@ -79,6 +79,7 @@ class Concept2Component : public PollingComponent {
   void set_calories_sensor(sensor::Sensor *s) { this->calories_sensor_ = s; }
   void set_elapsed_time_sensor(sensor::Sensor *s) { this->elapsed_time_sensor_ = s; }
   void set_drag_factor_sensor(sensor::Sensor *s) { this->drag_factor_sensor_ = s; }
+  void set_flywheel_sensor(sensor::Sensor *s) { this->flywheel_sensor_ = s; }
 #endif
 
  protected:
@@ -94,6 +95,7 @@ class Concept2Component : public PollingComponent {
   light::LightState *status_light_{nullptr};
   int last_led_status_{-1};
   bool led_rowing_{false};
+  uint32_t last_active_ms_{0};
 #endif
   uint16_t dircon_port_{36866};
   std::string device_name_{"Concept2 Rower"};
@@ -109,6 +111,7 @@ class Concept2Component : public PollingComponent {
   sensor::Sensor *calories_sensor_{nullptr};
   sensor::Sensor *elapsed_time_sensor_{nullptr};
   sensor::Sensor *drag_factor_sensor_{nullptr};
+  sensor::Sensor *flywheel_sensor_{nullptr};
   uint32_t last_sensor_pub_ms_{0};
 #endif
 

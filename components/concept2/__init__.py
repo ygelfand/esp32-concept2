@@ -38,7 +38,7 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_BLE, default=True): cv.boolean,
         cv.Optional(CONF_DIRCON, default={}): DIRCON_SCHEMA,
         cv.Optional(CONF_STATUS_LIGHT): cv.use_id(light.LightState),
-        cv.Optional(CONF_PAUSE_BUTTON, default="GPIO0"): pins.internal_gpio_input_pin_schema,
+        cv.Optional(CONF_PAUSE_BUTTON): pins.internal_gpio_input_pin_schema,
     }
 ).extend(cv.polling_component_schema("100ms"))
 

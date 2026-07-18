@@ -60,6 +60,7 @@ constexpr uint8_t PM_GET_DRAGFACTOR = 0xC1;       // unitless
 constexpr uint8_t PM_GET_STROKERATE = 0xB3;       // strokes/min
 constexpr uint8_t PM_GET_STROKE_500MPACE = 0xA8;  // sec/500m
 constexpr uint8_t PM_GET_STROKE_POWER = 0xA9;     // watts
+constexpr uint8_t PM_GET_FLYWHEELSPEED = 0xEC;    // rpm
 
 // Number of rotating poll blocks. The caller cycles `block_index` 0..count-1 so
 // each poll requests only a few proprietary getters (the PM's reply wrapper

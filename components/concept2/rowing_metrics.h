@@ -66,6 +66,7 @@ struct RowingMetrics {
   StrokeState stroke_state{StrokeState::UNKNOWN};
   WorkoutState workout_state{WorkoutState::UNKNOWN};
   uint8_t drag_factor{0};
+  uint16_t flywheel_rpm{0};
 
   // True once at least one full poll cycle has populated real data.
   bool valid{false};

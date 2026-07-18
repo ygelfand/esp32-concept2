@@ -10,7 +10,8 @@ namespace {
 // 0x1A. The caller cycles through them one per poll.
 // Proprietary getters (wrapped in 0x1A) that the PM4 answers reliably.
 const uint8_t BLK_TIME_DIST[] = {PM_GET_WORKTIME, PM_GET_WORKDISTANCE};
-const uint8_t BLK_STATE_DRAG[] = {PM_GET_STROKESTATE, PM_GET_DRAGFACTOR, PM_GET_WORKOUTSTATE};
+const uint8_t BLK_STATE_DRAG[] = {PM_GET_STROKESTATE, PM_GET_DRAGFACTOR, PM_GET_WORKOUTSTATE,
+                                 PM_GET_FLYWHEELSPEED};
 // Public getters (sent bare) - the PM returns empty for the proprietary
 // pace/power/stroke-rate getters, so use the standard CSAFE ones.
 const uint8_t BLK_PUB_POWER_PACE_RATE[] = {CMD_GETPOWER, CMD_GETPACE, CMD_GETCADENCE};
@@ -24,7 +25,7 @@ struct PollBlock {
 const PollBlock POLL_BLOCKS[] = {
     {BLK_TIME_DIST, 2, true},
     {BLK_PUB_POWER_PACE_RATE, 3, false},
-    {BLK_STATE_DRAG, 3, true},
+    {BLK_STATE_DRAG, 4, true},
     {BLK_PUB_HR_CAL, 2, false},
 };
 const size_t NUM_POLL_BLOCKS = sizeof(POLL_BLOCKS) / sizeof(POLL_BLOCKS[0]);
@@ -129,6 +130,10 @@ void apply_proprietary(uint8_t id, const uint8_t *data, uint8_t len, RowingMetri
     case PM_GET_DRAGFACTOR:
       if (len >= 1)
         m.drag_factor = data[0];
+      break;
+    case PM_GET_FLYWHEELSPEED:  // 2-byte rpm
+      if (len >= 2)
+        m.flywheel_rpm = le16(data);
       break;
     default:
       break;

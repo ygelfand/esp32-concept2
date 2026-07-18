@@ -90,7 +90,15 @@ void Concept2Component::loop() {
 
   this->update_derived_(m);
 #ifdef USE_LIGHT
-  this->led_rowing_ = (m.inst_power_w > 0) || (m.stroke_rate_spm > 0.5f);
+  // "Rowing" = the PM is in an active stroke phase (power lingers as the wheel
+  // coasts, so it's a poor signal). Hold green ~3 s past the last stroke so it
+  // doesn't flicker between strokes, then decay to amber when actually stopped.
+  bool active_stroke = m.stroke_state == StrokeState::DRIVING ||
+                       m.stroke_state == StrokeState::DWELLING ||
+                       m.stroke_state == StrokeState::RECOVERY;
+  if (active_stroke)
+    this->last_active_ms_ = millis();
+  this->led_rowing_ = (millis() - this->last_active_ms_) < 3000;
 #endif
 
   // Throttled bring-up log so decoded metrics are observable on the console.
@@ -209,6 +217,8 @@ void Concept2Component::publish_sensors_(const RowingMetrics &m) {
     this->elapsed_time_sensor_->publish_state(m.elapsed_time_s);
   if (this->drag_factor_sensor_ != nullptr)
     this->drag_factor_sensor_->publish_state(m.drag_factor);
+  if (this->flywheel_sensor_ != nullptr)
+    this->flywheel_sensor_->publish_state(m.flywheel_rpm);
 }
 #endif  // USE_SENSOR
 

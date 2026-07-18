@@ -26,6 +26,7 @@ CONF_HEART_RATE = "heart_rate"
 CONF_CALORIES = "calories"
 CONF_ELAPSED_TIME = "elapsed_time"
 CONF_DRAG_FACTOR = "drag_factor"
+CONF_FLYWHEEL_RPM = "flywheel_rpm"
 
 # key -> (schema, C++ setter name)
 SENSORS = {
@@ -109,6 +110,15 @@ SENSORS = {
             state_class=STATE_CLASS_MEASUREMENT,
         ),
         "set_drag_factor_sensor",
+    ),
+    CONF_FLYWHEEL_RPM: (
+        sensor.sensor_schema(
+            unit_of_measurement="rpm",
+            accuracy_decimals=0,
+            icon="mdi:fan",
+            state_class=STATE_CLASS_MEASUREMENT,
+        ),
+        "set_flywheel_sensor",
     ),
 }
 
