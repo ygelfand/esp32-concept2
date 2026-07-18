@@ -260,6 +260,8 @@ void PmUsbHost::out_transfer_cb(usb_transfer_t *xfer) {
 }
 
 void PmUsbHost::set_bus_power(bool on) {
+  if (!on)
+    this->dev_ready_ = false;  // stop re-arming the IN endpoint before the port drops
   esp_err_t err = usb_host_lib_set_root_port_power(on);
   if (err != ESP_OK)
     ESP_LOGW(TAG, "set_root_port_power(%d) failed: %s", on, esp_err_to_name(err));
