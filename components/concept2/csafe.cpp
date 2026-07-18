@@ -6,20 +6,21 @@ namespace csafe {
 
 namespace {
 
-// Commands sent every poll cycle. Public short commands first, then the
-// proprietary wrapper carrying the high-resolution PM getters.
+// Commands sent every poll cycle. Public GETHRCUR for current heart rate, plus
+// the 0x1A-wrapped proprietary high-resolution getters (little-endian values,
+// per PM3Monitor / mbottini working implementations). A large reply may span
+// several 120-byte frames; the caller reassembles complete F1..F2 frames.
 const uint8_t POLL_CONTENTS[] = {
-    CMD_GETPOWER,
-    CMD_GETCALORIES,
     CMD_GETHRCUR,
-    CMD_PROP_WRAPPER, 7,
-    PM_GET_WORKTIME,
-    PM_GET_WORKDISTANCE,
-    PM_GET_STROKERATE,
-    PM_GET_STROKE_500MPACE,
-    PM_GET_STROKESTATE,
-    PM_GET_WORKOUTSTATE,
-    PM_GET_DRAGFACTOR,
+    CMD_PROP_WRAPPER, 8,
+    PM_GET_WORKTIME,         // 0xA0 - 4B, 0.01 s
+    PM_GET_WORKDISTANCE,     // 0xA3 - 4B, 0.1 m
+    PM_GET_STROKE_500MPACE,  // 0xA8 - 4B, 0.01 s
+    PM_GET_STROKE_POWER,     // 0xA9 - 4B, watts
+    PM_GET_STROKERATE,       // 0xB3 - 1B, spm
+    PM_GET_STROKESTATE,      // 0xBF - 1B, enum
+    PM_GET_DRAGFACTOR,       // 0xC1 - 1B
+    PM_GET_WORKOUTSTATE,     // 0x8D - 1B, enum
 };
 
 inline uint32_t le32(const uint8_t *p) {
@@ -53,6 +54,18 @@ void apply_public(uint8_t id, const uint8_t *data, uint8_t len, RowingMetrics &m
       if (len >= 2)
         m.inst_power_w = static_cast<int16_t>(le16(data));
       break;
+    case CMD_GETCADENCE:  // [spm LSB, MSB, units]
+      if (len >= 2)
+        m.stroke_rate_spm = static_cast<float>(le16(data));
+      break;
+    case CMD_GETPACE:  // [sec/km LSB, MSB, units] -> FTMS wants sec/500m
+      if (len >= 2)
+        m.inst_pace_s500 = static_cast<uint16_t>(le16(data) / 2);
+      break;
+    case CMD_GETHORIZONTAL:  // [distance LSB, MSB, units], meters
+      if (len >= 2)
+        m.total_distance_m = static_cast<float>(le16(data));
+      break;
     case CMD_GETCALORIES:  // [kcal LSB, MSB]
       if (len >= 2)
         m.total_energy_kcal = le16(data);
@@ -61,8 +74,13 @@ void apply_public(uint8_t id, const uint8_t *data, uint8_t len, RowingMetrics &m
       if (len >= 1)
         m.heart_rate_bpm = data[0];
       break;
+    case CMD_GETTWORK:  // [hours, minutes, seconds]
+      if (len >= 3)
+        m.elapsed_time_s =
+            static_cast<uint16_t>(data[0] * 3600 + data[1] * 60 + data[2]);
+      break;
     default:
-      break;  // GETCADENCE/GETPACE/etc. superseded by the proprietary getters
+      break;
   }
 }
 
@@ -86,9 +104,13 @@ void apply_proprietary(uint8_t id, const uint8_t *data, uint8_t len, RowingMetri
       if (len >= 1)
         m.stroke_rate_spm = static_cast<float>(data[0]);
       break;
-    case PM_GET_STROKE_500MPACE:  // sec/500m @0.01 s
-      if (len >= 2)
-        m.inst_pace_s500 = static_cast<uint16_t>(le16(data) / 100);
+    case PM_GET_STROKE_500MPACE:  // 4-byte value, sec/500m @0.01 s
+      if (len >= 4)
+        m.inst_pace_s500 = static_cast<uint16_t>(le32(data) / 100);
+      break;
+    case PM_GET_STROKE_POWER:  // 4-byte value, watts
+      if (len >= 4)
+        m.inst_power_w = static_cast<int16_t>(le32(data));
       break;
     case PM_GET_STROKESTATE:
       if (len >= 1)

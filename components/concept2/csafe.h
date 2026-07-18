@@ -39,6 +39,7 @@ constexpr uint8_t FRAME_STUFF = 0xF3;
 
 // Public CSAFE commands we send (all short commands).
 constexpr uint8_t CMD_GETSTATUS = 0x80;
+constexpr uint8_t CMD_GETTWORK = 0xA0;       // elapsed time, H:M:S
 constexpr uint8_t CMD_GETHORIZONTAL = 0xA1;  // distance, meters
 constexpr uint8_t CMD_GETCALORIES = 0xA3;    // total kcal
 constexpr uint8_t CMD_GETPACE = 0xA6;        // sec/km

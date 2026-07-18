@@ -85,42 +85,52 @@ void Concept2Component::loop() {
 
 #ifdef USE_ESP_IDF
 void Concept2Component::on_frame_(const uint8_t *data, size_t len) {
-  // Runs on the USB task. Parse into the persistent target (keeps fields not
-  // present in this frame), then hand a snapshot to the main loop.
-  bool ok = csafe::parse_response(data, len, this->parse_metrics_);
-  uint32_t now = millis();
-  if (now - this->last_rx_log_ms_ >= 1000) {
-    this->last_rx_log_ms_ = now;
-    int f1 = -1, f2 = -1;
-    for (size_t i = 0; i < len; i++) {
-      if (f1 < 0) {
-        if (data[i] == 0xF1)
-          f1 = (int) i;
-      } else if (data[i] == 0xF2) {
-        f2 = (int) i;
-        break;
-      }
+  // Runs on the USB task. The PM may split a large CSAFE frame across multiple
+  // HID reports, so accumulate and extract complete F1..F2 frames before
+  // parsing. (A data byte 0xF2 is byte-stuffed, so the first raw 0xF2 after a
+  // start flag is always the real stop.)
+  this->rx_buf_.insert(this->rx_buf_.end(), data, data + len);
+  if (this->rx_buf_.size() > 2048)  // runaway guard
+    this->rx_buf_.erase(this->rx_buf_.begin(), this->rx_buf_.end() - 512);
+
+  while (!this->rx_buf_.empty()) {
+    // Drop anything before the start flag.
+    size_t f1 = 0;
+    while (f1 < this->rx_buf_.size() && this->rx_buf_[f1] != csafe::FRAME_START_STD &&
+           this->rx_buf_[f1] != csafe::FRAME_START_EXT)
+      f1++;
+    if (f1 > 0)
+      this->rx_buf_.erase(this->rx_buf_.begin(), this->rx_buf_.begin() + f1);
+    if (this->rx_buf_.empty())
+      break;
+
+    // Find the stop flag; if absent the frame is incomplete - wait for more.
+    size_t f2 = 1;
+    while (f2 < this->rx_buf_.size() && this->rx_buf_[f2] != csafe::FRAME_STOP)
+      f2++;
+    if (f2 >= this->rx_buf_.size())
+      break;
+
+    size_t flen = f2 + 1;
+    bool ok = csafe::parse_response(this->rx_buf_.data(), flen, this->parse_metrics_);
+    uint32_t now = millis();
+    if (now - this->last_rx_log_ms_ >= 1000) {
+      this->last_rx_log_ms_ = now;
+      ESP_LOGD(TAG, "frame %u bytes parse=%s", (unsigned) flen, ok ? "OK" : "FAIL");
+      for (size_t off = 0; off < flen; off += 32)
+        ESP_LOGD(TAG, "  [%02u] %s", (unsigned) off,
+                 format_hex_pretty(this->rx_buf_.data() + off,
+                                   (flen - off) < 32 ? (flen - off) : 32)
+                     .c_str());
     }
-    int cksum = -1, stored = -1;
-    if (f1 >= 0 && f2 > f1 + 1) {
-      uint8_t c = 0;
-      for (int i = f1 + 1; i < f2 - 1; i++)
-        c ^= data[i];
-      cksum = c;
-      stored = data[f2 - 1];
+    if (ok) {
+      portENTER_CRITICAL(&this->mux_);
+      this->shared_metrics_ = this->parse_metrics_;
+      this->have_new_ = true;
+      portEXIT_CRITICAL(&this->mux_);
     }
-    ESP_LOGD(TAG, "RX len=%u parse=%s f1=%d f2=%d cksum=0x%02X stored=0x%02X", (unsigned) len,
-             ok ? "OK" : "FAIL", f1, f2, cksum & 0xFF, stored & 0xFF);
-    ESP_LOGD(TAG, "  head: %s", format_hex_pretty(data, len < 40 ? len : 40).c_str());
-    if (len > 40)
-      ESP_LOGD(TAG, "  tail: %s", format_hex_pretty(data + (len - 40), 40).c_str());
+    this->rx_buf_.erase(this->rx_buf_.begin(), this->rx_buf_.begin() + flen);
   }
-  if (!ok)
-    return;
-  portENTER_CRITICAL(&this->mux_);
-  this->shared_metrics_ = this->parse_metrics_;
-  this->have_new_ = true;
-  portEXIT_CRITICAL(&this->mux_);
 }
 
 void Concept2Component::update_derived_(RowingMetrics &m) {

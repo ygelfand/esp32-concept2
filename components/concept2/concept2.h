@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "esphome/core/component.h"
 
@@ -93,6 +94,7 @@ class Concept2Component : public PollingComponent {
   // frames), plus the hand-off to the main loop guarded by a spinlock.
   RowingMetrics parse_metrics_{};
   RowingMetrics shared_metrics_{};
+  std::vector<uint8_t> rx_buf_;  // accumulates HID reports into complete frames
   volatile bool have_new_{false};
   uint32_t last_log_ms_{0};
   uint32_t last_tx_log_ms_{0};
