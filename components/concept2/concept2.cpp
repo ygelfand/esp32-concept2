@@ -94,47 +94,30 @@ void Concept2Component::on_frame_(const uint8_t *data, size_t len) {
       ESP_LOGD(TAG, "  [%02u] %s", (unsigned) off,
                format_hex_pretty(data + off, (len - off) < 32 ? (len - off) : 32).c_str());
   }
-  this->rx_buf_.insert(this->rx_buf_.end(), data, data + len);
-  if (this->rx_buf_.size() > 2048)  // runaway guard
-    this->rx_buf_.erase(this->rx_buf_.begin(), this->rx_buf_.end() - 512);
+  size_t f1 = 0;
+  while (f1 < len && data[f1] != csafe::FRAME_START_STD && data[f1] != csafe::FRAME_START_EXT)
+    f1++;
+  if (f1 >= len)
+    return;
+  size_t f2 = f1 + 1;
+  while (f2 < len && data[f2] != csafe::FRAME_STOP)
+    f2++;
+  if (f2 >= len)
+    return;  // no complete frame in this report
 
-  while (!this->rx_buf_.empty()) {
-    // Drop anything before the start flag.
-    size_t f1 = 0;
-    while (f1 < this->rx_buf_.size() && this->rx_buf_[f1] != csafe::FRAME_START_STD &&
-           this->rx_buf_[f1] != csafe::FRAME_START_EXT)
-      f1++;
-    if (f1 > 0)
-      this->rx_buf_.erase(this->rx_buf_.begin(), this->rx_buf_.begin() + f1);
-    if (this->rx_buf_.empty())
-      break;
-
-    // Find the stop flag; if absent the frame is incomplete - wait for more.
-    size_t f2 = 1;
-    while (f2 < this->rx_buf_.size() && this->rx_buf_[f2] != csafe::FRAME_STOP)
-      f2++;
-    if (f2 >= this->rx_buf_.size())
-      break;
-
-    size_t flen = f2 + 1;
-    bool ok = csafe::parse_response(this->rx_buf_.data(), flen, this->parse_metrics_);
-    uint32_t now = millis();
-    if (now - this->last_rx_log_ms_ >= 1000) {
-      this->last_rx_log_ms_ = now;
-      ESP_LOGD(TAG, "frame %u bytes parse=%s", (unsigned) flen, ok ? "OK" : "FAIL");
-      for (size_t off = 0; off < flen; off += 32)
-        ESP_LOGD(TAG, "  [%02u] %s", (unsigned) off,
-                 format_hex_pretty(this->rx_buf_.data() + off,
-                                   (flen - off) < 32 ? (flen - off) : 32)
-                     .c_str());
-    }
-    if (ok) {
-      portENTER_CRITICAL(&this->mux_);
-      this->shared_metrics_ = this->parse_metrics_;
-      this->have_new_ = true;
-      portEXIT_CRITICAL(&this->mux_);
-    }
-    this->rx_buf_.erase(this->rx_buf_.begin(), this->rx_buf_.begin() + flen);
+  size_t flen = f2 - f1 + 1;
+  bool ok = csafe::parse_response(data + f1, flen, this->parse_metrics_);
+  uint32_t now = millis();
+  if (now - this->last_rx_log_ms_ >= 1000) {
+    this->last_rx_log_ms_ = now;
+    ESP_LOGD(TAG, "frame %u bytes parse=%s: %s", (unsigned) flen, ok ? "OK" : "FAIL",
+             format_hex_pretty(data + f1, flen).c_str());
+  }
+  if (ok) {
+    portENTER_CRITICAL(&this->mux_);
+    this->shared_metrics_ = this->parse_metrics_;
+    this->have_new_ = true;
+    portEXIT_CRITICAL(&this->mux_);
   }
 }
 
