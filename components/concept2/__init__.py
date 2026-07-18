@@ -1,6 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import esp32, esp32_ble
+from esphome import pins
+from esphome.components import esp32, esp32_ble, light
 from esphome.const import CONF_ID, CONF_NAME, CONF_PORT
 from esphome.core import CORE
 
@@ -19,6 +20,8 @@ CONF_CONCEPT2_ID = "concept2_id"
 CONF_BLE = "ble"
 CONF_DIRCON = "dircon"
 CONF_ENABLED = "enabled"
+CONF_STATUS_LIGHT = "status_light"
+CONF_PAUSE_BUTTON = "pause_button"
 
 DIRCON_SCHEMA = cv.Schema(
     {
@@ -34,6 +37,8 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_NAME, default="Concept2 Rower"): cv.string,
         cv.Optional(CONF_BLE, default=True): cv.boolean,
         cv.Optional(CONF_DIRCON, default={}): DIRCON_SCHEMA,
+        cv.Optional(CONF_STATUS_LIGHT): cv.use_id(light.LightState),
+        cv.Optional(CONF_PAUSE_BUTTON, default="GPIO0"): pins.internal_gpio_input_pin_schema,
     }
 ).extend(cv.polling_component_schema("100ms"))
 
@@ -66,6 +71,14 @@ async def to_code(config):
     dircon = config[CONF_DIRCON]
     cg.add(var.set_dircon_enabled(dircon[CONF_ENABLED]))
     cg.add(var.set_dircon_port(dircon[CONF_PORT]))
+
+    if CONF_STATUS_LIGHT in config:
+        status_light = await cg.get_variable(config[CONF_STATUS_LIGHT])
+        cg.add(var.set_status_light(status_light))
+
+    if CONF_PAUSE_BUTTON in config:
+        button = await cg.gpio_pin_expression(config[CONF_PAUSE_BUTTON])
+        cg.add(var.set_pause_button(button))
 
     # The USB host stack lives in the built-in ESP-IDF `usb_host` component.
     # Newer ESPHome prunes unreferenced built-in IDF components; keep it in.

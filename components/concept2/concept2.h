@@ -4,11 +4,15 @@
 #include <vector>
 
 #include "esphome/core/component.h"
+#include "esphome/core/gpio.h"
 
 #include "rowing_metrics.h"
 
 #ifdef USE_SENSOR
 #include "esphome/components/sensor/sensor.h"
+#endif
+#ifdef USE_LIGHT
+#include "esphome/components/light/light_state.h"
 #endif
 
 #ifdef USE_ESP_IDF
@@ -39,6 +43,23 @@ class Concept2Component : public PollingComponent {
   void set_dircon_port(uint16_t p) { this->dircon_port_ = p; }
   void set_device_name(const std::string &n) { this->device_name_ = n; }
 
+  // Pause/resume CSAFE polling. When paused the PM stops receiving frames and
+  // goes to sleep on its own inactivity timeout.
+  void set_active(bool active) { this->active_ = active; }
+  void toggle_active() { this->active_ = !this->active_; }
+  bool is_active() const { return this->active_; }
+
+#ifdef USE_ESP_IDF
+  bool pm_connected() const { return this->usb_.connected(); }
+#else
+  bool pm_connected() const { return false; }
+#endif
+
+  void set_pause_button(InternalGPIOPin *pin) { this->pause_button_ = pin; }
+#ifdef USE_LIGHT
+  void set_status_light(light::LightState *l) { this->status_light_ = l; }
+#endif
+
 #ifdef USE_ESP_IDF
   // Called by esp32_ble's dispatcher (registered from __init__.py); forwards to
   // the BLE FTMS server.
@@ -61,8 +82,19 @@ class Concept2Component : public PollingComponent {
 #endif
 
  protected:
+  bool active_{true};
   bool enable_ble_{true};
   bool dircon_enabled_{true};
+
+  InternalGPIOPin *pause_button_{nullptr};
+  bool button_prev_{false};
+  uint32_t last_button_ms_{0};
+#ifdef USE_LIGHT
+  void update_status_led_();
+  light::LightState *status_light_{nullptr};
+  int last_led_status_{-1};
+  bool led_rowing_{false};
+#endif
   uint16_t dircon_port_{36866};
   std::string device_name_{"Concept2 Rower"};
 

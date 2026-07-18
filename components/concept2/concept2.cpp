@@ -12,6 +12,8 @@ namespace concept2 {
 static const char *const TAG = "concept2";
 
 void Concept2Component::setup() {
+  if (this->pause_button_ != nullptr)
+    this->pause_button_->setup();
 #ifdef USE_ESP_IDF
   this->usb_.set_frame_callback(
       [this](const uint8_t *data, size_t len) { this->on_frame_(data, len); });
@@ -52,10 +54,25 @@ void Concept2Component::send_next_poll_() {
 
 void Concept2Component::loop() {
 #ifdef USE_ESP_IDF
+  // Pause button: toggle polling on a debounced press (boot button is active-low).
+  if (this->pause_button_ != nullptr) {
+    bool pressed = !this->pause_button_->digital_read();
+    uint32_t bnow = millis();
+    if (pressed && !this->button_prev_ && (bnow - this->last_button_ms_ > 250)) {
+      this->last_button_ms_ = bnow;
+      this->toggle_active();
+      ESP_LOGI(TAG, "pause button: polling %s", this->active_ ? "resumed" : "paused");
+    }
+    this->button_prev_ = pressed;
+  }
+#ifdef USE_LIGHT
+  this->update_status_led_();
+#endif
+
   // Synchronous poll cycle: send the next block only once the previous reply has
   // been parsed (awaiting_ cleared), honoring a min inter-frame gap; resend on
   // timeout so a silent block can't stall the rotation.
-  if (this->usb_.connected()) {
+  if (this->usb_.connected() && this->active_) {
     uint32_t pn = millis();
     if ((pn - this->last_poll_ms_ >= 50) &&
         (!this->awaiting_ || (pn - this->last_poll_ms_ > 300)))
@@ -72,6 +89,9 @@ void Concept2Component::loop() {
   portEXIT_CRITICAL(&this->mux_);
 
   this->update_derived_(m);
+#ifdef USE_LIGHT
+  this->led_rowing_ = (m.inst_power_w > 0) || (m.stroke_rate_spm > 0.5f);
+#endif
 
   // Throttled bring-up log so decoded metrics are observable on the console.
   uint32_t now = millis();
@@ -205,6 +225,36 @@ void Concept2Component::dump_config() {
     ESP_LOGCONFIG(TAG, "  USB: waiting for PM");
 #endif
 }
+
+#ifdef USE_LIGHT
+void Concept2Component::update_status_led_() {
+  if (this->status_light_ == nullptr)
+    return;
+  int status;
+  float r, g, b;
+  if (!this->pm_connected()) {
+    status = 0;  // red: no PM attached
+    r = 1.0f, g = 0.0f, b = 0.0f;
+  } else if (!this->active_) {
+    status = 1;  // blue: polling paused
+    r = 0.0f, g = 0.0f, b = 1.0f;
+  } else if (this->led_rowing_) {
+    status = 2;  // green: actively rowing
+    r = 0.0f, g = 1.0f, b = 0.0f;
+  } else {
+    status = 3;  // amber: connected, idle
+    r = 1.0f, g = 0.6f, b = 0.0f;
+  }
+  if (status == this->last_led_status_)
+    return;
+  this->last_led_status_ = status;
+  auto call = this->status_light_->turn_on();
+  call.set_rgb(r, g, b);
+  call.set_brightness(0.4f);
+  call.set_transition_length(0);
+  call.perform();
+}
+#endif
 
 }  // namespace concept2
 }  // namespace esphome
