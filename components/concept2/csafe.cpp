@@ -11,16 +11,10 @@ namespace {
 // per PM3Monitor / mbottini working implementations). A large reply may span
 // several 120-byte frames; the caller reassembles complete F1..F2 frames.
 const uint8_t POLL_CONTENTS[] = {
-    CMD_GETHRCUR,
-    CMD_PROP_WRAPPER, 8,
-    PM_GET_WORKTIME,         // 0xA0 - 4B, 0.01 s
-    PM_GET_WORKDISTANCE,     // 0xA3 - 4B, 0.1 m
-    PM_GET_STROKE_500MPACE,  // 0xA8 - 4B, 0.01 s
-    PM_GET_STROKE_POWER,     // 0xA9 - 4B, watts
-    PM_GET_STROKERATE,       // 0xB3 - 1B, spm
-    PM_GET_STROKESTATE,      // 0xBF - 1B, enum
-    PM_GET_DRAGFACTOR,       // 0xC1 - 1B
-    PM_GET_WORKOUTSTATE,     // 0x8D - 1B, enum
+    CMD_PROP_WRAPPER, 3,
+    PM_GET_WORKTIME,
+    PM_GET_WORKDISTANCE,
+    PM_GET_STROKERATE,
 };
 
 inline uint32_t le32(const uint8_t *p) {
