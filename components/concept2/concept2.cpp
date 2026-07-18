@@ -91,8 +91,29 @@ void Concept2Component::on_frame_(const uint8_t *data, size_t len) {
   uint32_t now = millis();
   if (now - this->last_rx_log_ms_ >= 1000) {
     this->last_rx_log_ms_ = now;
-    ESP_LOGD(TAG, "RX %u bytes parse=%s: %s", (unsigned) len, ok ? "OK" : "FAIL",
-             format_hex_pretty(data, len).c_str());
+    int f1 = -1, f2 = -1;
+    for (size_t i = 0; i < len; i++) {
+      if (f1 < 0) {
+        if (data[i] == 0xF1)
+          f1 = (int) i;
+      } else if (data[i] == 0xF2) {
+        f2 = (int) i;
+        break;
+      }
+    }
+    int cksum = -1, stored = -1;
+    if (f1 >= 0 && f2 > f1 + 1) {
+      uint8_t c = 0;
+      for (int i = f1 + 1; i < f2 - 1; i++)
+        c ^= data[i];
+      cksum = c;
+      stored = data[f2 - 1];
+    }
+    ESP_LOGD(TAG, "RX len=%u parse=%s f1=%d f2=%d cksum=0x%02X stored=0x%02X", (unsigned) len,
+             ok ? "OK" : "FAIL", f1, f2, cksum & 0xFF, stored & 0xFF);
+    ESP_LOGD(TAG, "  head: %s", format_hex_pretty(data, len < 40 ? len : 40).c_str());
+    if (len > 40)
+      ESP_LOGD(TAG, "  tail: %s", format_hex_pretty(data + (len - 40), 40).c_str());
   }
   if (!ok)
     return;
