@@ -72,6 +72,10 @@ class Concept2Component : public PollingComponent {
 #endif
 
   void set_pause_button(InternalGPIOPin *pin) { this->pause_button_ = pin; }
+  // Optional GPIO driving a high-side VBUS load switch (e.g. TPS22918 EN).
+  // When set, sleep physically cuts 5V to the PM so it powers off; wake
+  // restores it. Unset = sleep is a soft standby (stop polling only).
+  void set_vbus_pin(GPIOPin *pin) { this->vbus_pin_ = pin; }
 #ifdef USE_LIGHT
   void set_status_light(light::LightState *l) { this->status_light_ = l; }
 #endif
@@ -104,6 +108,7 @@ class Concept2Component : public PollingComponent {
   bool dircon_enabled_{true};
 
   InternalGPIOPin *pause_button_{nullptr};
+  GPIOPin *vbus_pin_{nullptr};
   bool button_prev_{false};
   uint32_t last_button_ms_{0};
   uint8_t tap_count_{0};
@@ -123,7 +128,6 @@ class Concept2Component : public PollingComponent {
   void wake_();
   void reset_workout_();
   void send_command_(uint8_t cmd);
-  void send_screenstate_(uint8_t type, uint8_t value);
 #endif
 #ifdef USE_LIGHT
   void update_status_led_();

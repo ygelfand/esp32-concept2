@@ -22,6 +22,7 @@ CONF_DIRCON = "dircon"
 CONF_ENABLED = "enabled"
 CONF_STATUS_LIGHT = "status_light"
 CONF_PAUSE_BUTTON = "pause_button"
+CONF_VBUS_PIN = "vbus_pin"
 CONF_SLEEP_TIMEOUT = "sleep_timeout"
 CONF_AUTOSLEEP_ON_IDLE = "autosleep_on_idle"
 
@@ -41,6 +42,7 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_DIRCON, default={}): DIRCON_SCHEMA,
         cv.Optional(CONF_STATUS_LIGHT): cv.use_id(light.LightState),
         cv.Optional(CONF_PAUSE_BUTTON): pins.internal_gpio_input_pin_schema,
+        cv.Optional(CONF_VBUS_PIN): pins.gpio_output_pin_schema,
         cv.Optional(
             CONF_SLEEP_TIMEOUT, default="2min"
         ): cv.positive_time_period_milliseconds,
@@ -88,6 +90,10 @@ async def to_code(config):
     if CONF_PAUSE_BUTTON in config:
         button = await cg.gpio_pin_expression(config[CONF_PAUSE_BUTTON])
         cg.add(var.set_pause_button(button))
+
+    if CONF_VBUS_PIN in config:
+        vbus = await cg.gpio_pin_expression(config[CONF_VBUS_PIN])
+        cg.add(var.set_vbus_pin(vbus))
 
     # The USB host stack lives in the built-in ESP-IDF `usb_host` component.
     # Newer ESPHome prunes unreferenced built-in IDF components; keep it in.

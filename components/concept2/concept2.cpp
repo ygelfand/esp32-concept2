@@ -14,6 +14,10 @@ static const char *const TAG = "concept2";
 void Concept2Component::setup() {
   if (this->pause_button_ != nullptr)
     this->pause_button_->setup();
+  if (this->vbus_pin_ != nullptr) {
+    this->vbus_pin_->setup();
+    this->vbus_pin_->digital_write(true);  // VBUS on so the PM enumerates at boot
+  }
   this->last_activity_ms_ = millis();
 #ifdef USE_ESP_IDF
   this->usb_.set_frame_callback(
@@ -220,34 +224,35 @@ void Concept2Component::send_command_(uint8_t cmd) {
     this->usb_.write_frame(frame, n);
 }
 
-void Concept2Component::send_screenstate_(uint8_t type, uint8_t value) {
-  // F1 76 04 13 02 <type> <value> <cksum> F2  (0x76 = proprietary SET wrapper).
-  uint8_t contents[] = {csafe::CMD_SETPMCFG, 0x04, csafe::PM_SET_SCREENSTATE, 0x02, type, value};
-  uint8_t frame[16];
-  size_t n = csafe::build_frame(contents, sizeof(contents), frame, sizeof(frame));
-  if (n > 0) {
-    ESP_LOGI(TAG, "screenstate TX (type=%u val=%u): %s", type, value,
-             format_hex_pretty(frame, n).c_str());
-    this->usb_.write_frame(frame, n);
-  }
-}
-
 void Concept2Component::reset_workout_() {
   ESP_LOGI(TAG, "reset workout");
   this->send_command_(csafe::CMD_RESET);
 }
 
 void Concept2Component::enter_sleep_() {
-  ESP_LOGI(TAG, "sleep: SET_SCREENSTATE prepare-to-sleep");
-  this->send_screenstate_(csafe::SCREENTYPE_RACE, csafe::SCREENVALUE_PREPARETOSLEEP);
+  // A USB-docked PM won't power off from any CSAFE command (it treats VBUS as
+  // "charging" and disables auto-shutoff), so the only true power-off is cutting
+  // VBUS with the load switch. Without a vbus_pin this is just a soft standby:
+  // send the PM to Idle and stop polling.
+  this->send_command_(csafe::CMD_GOIDLE);
+  if (this->vbus_pin_ != nullptr) {
+    ESP_LOGI(TAG, "sleep: cutting VBUS (load switch off)");
+    this->usb_.set_bus_power(false);      // stop IN resubmits + drop the root port
+    this->vbus_pin_->digital_write(false);  // TPS22918 EN low -> 5V to PM removed
+  } else {
+    ESP_LOGI(TAG, "standby: PM to idle, polling stopped (no vbus_pin -> PM stays powered)");
+  }
   this->sleeping_ = true;
 }
 
 void Concept2Component::wake_() {
-  ESP_LOGI(TAG, "wake: go to main screen + resume");
+  ESP_LOGI(TAG, "wake");
+  if (this->vbus_pin_ != nullptr) {
+    this->vbus_pin_->digital_write(true);  // restore 5V -> PM re-attaches
+    this->usb_.set_bus_power(true);        // re-power the root port -> re-enumerate
+  }
   this->sleeping_ = false;
   this->last_activity_ms_ = millis();
-  this->send_screenstate_(csafe::SCREENTYPE_WORKOUT, csafe::SCREENVALUE_GOTOMAINSCREEN);
 }
 
 void Concept2Component::handle_taps_(uint8_t count) {
@@ -331,7 +336,7 @@ void Concept2Component::update_status_led_() {
   int status;
   float r, g, b;
   if (!this->active_) {
-    status = 1;  // blue: paused (we intentionally drop the port)
+    status = 1;  // blue: paused (polling stopped)
     r = 0.0f, g = 0.0f, b = 1.0f;
   } else if (!this->pm_connected()) {
     status = 0;  // red: no PM attached
