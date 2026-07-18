@@ -259,6 +259,14 @@ void PmUsbHost::out_transfer_cb(usb_transfer_t *xfer) {
   static_cast<PmUsbHost *>(xfer->context)->out_busy_ = false;
 }
 
+void PmUsbHost::set_bus_power(bool on) {
+  esp_err_t err = usb_host_lib_set_root_port_power(on);
+  if (err != ESP_OK)
+    ESP_LOGW(TAG, "set_root_port_power(%d) failed: %s", on, esp_err_to_name(err));
+  else
+    ESP_LOGI(TAG, "root port power %s", on ? "on" : "off");
+}
+
 void PmUsbHost::close_device_() {
   this->dev_ready_ = false;
   if (this->in_xfer_ != nullptr) {

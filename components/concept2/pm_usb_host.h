@@ -45,6 +45,10 @@ class PmUsbHost {
   // transfer is already in flight, or the frame is too large.
   bool write_frame(const uint8_t *frame, size_t len);
 
+  // Power the root port on/off. Powering off drops the bus so the PM stops
+  // seeing a host and can sleep; powering on re-enumerates it.
+  void set_bus_power(bool on);
+
  private:
   // FreeRTOS entry point (static trampoline -> task_loop).
   static void task_trampoline(void *arg);

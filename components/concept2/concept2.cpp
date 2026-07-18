@@ -46,7 +46,7 @@ void Concept2Component::send_next_poll_() {
   this->awaiting_ = true;
   if (this->last_poll_ms_ - this->last_tx_log_ms_ >= 1000) {
     this->last_tx_log_ms_ = this->last_poll_ms_;
-    ESP_LOGD(TAG, "poll[%u] TX %u bytes (sent=%d): %s", (unsigned) idx, (unsigned) n, sent,
+    ESP_LOGV(TAG, "poll[%u] TX %u bytes (sent=%d): %s", (unsigned) idx, (unsigned) n, sent,
              format_hex_pretty(frame, n).c_str());
   }
 }
@@ -142,7 +142,7 @@ void Concept2Component::on_frame_(const uint8_t *data, size_t len) {
   uint32_t now = millis();
   if (now - this->last_rx_log_ms_ >= 1000) {
     this->last_rx_log_ms_ = now;
-    ESP_LOGD(TAG, "frame %u bytes parse=%s: %s", (unsigned) flen, ok ? "OK" : "FAIL",
+    ESP_LOGV(TAG, "frame %u bytes parse=%s: %s", (unsigned) flen, ok ? "OK" : "FAIL",
              format_hex_pretty(data + f1, flen).c_str());
   }
   if (ok) {
@@ -242,12 +242,12 @@ void Concept2Component::update_status_led_() {
     return;
   int status;
   float r, g, b;
-  if (!this->pm_connected()) {
+  if (!this->active_) {
+    status = 1;  // blue: paused (we intentionally drop the port)
+    r = 0.0f, g = 0.0f, b = 1.0f;
+  } else if (!this->pm_connected()) {
     status = 0;  // red: no PM attached
     r = 1.0f, g = 0.0f, b = 0.0f;
-  } else if (!this->active_) {
-    status = 1;  // blue: polling paused
-    r = 0.0f, g = 0.0f, b = 1.0f;
   } else if (this->led_rowing_) {
     status = 2;  // green: actively rowing
     r = 0.0f, g = 1.0f, b = 0.0f;

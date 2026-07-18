@@ -45,8 +45,13 @@ class Concept2Component : public PollingComponent {
 
   // Pause/resume CSAFE polling. When paused the PM stops receiving frames and
   // goes to sleep on its own inactivity timeout.
-  void set_active(bool active) { this->active_ = active; }
-  void toggle_active() { this->active_ = !this->active_; }
+  void set_active(bool active) {
+    this->active_ = active;
+#ifdef USE_ESP_IDF
+    this->usb_.set_bus_power(active);  // drop the port when paused so the PM sleeps
+#endif
+  }
+  void toggle_active() { this->set_active(!this->active_); }
   bool is_active() const { return this->active_; }
 
 #ifdef USE_ESP_IDF
