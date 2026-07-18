@@ -88,8 +88,10 @@ void Concept2Component::on_frame_(const uint8_t *data, size_t len) {
   uint32_t rawnow = millis();
   if (rawnow - this->last_raw_log_ms_ >= 1000) {
     this->last_raw_log_ms_ = rawnow;
-    ESP_LOGD(TAG, "raw rx %u bytes: %s", (unsigned) len,
-             format_hex_pretty(data, len < 40 ? len : 40).c_str());
+    ESP_LOGD(TAG, "raw rx %u bytes:", (unsigned) len);
+    for (size_t off = 0; off < len; off += 32)
+      ESP_LOGD(TAG, "  [%02u] %s", (unsigned) off,
+               format_hex_pretty(data + off, (len - off) < 32 ? (len - off) : 32).c_str());
   }
   this->rx_buf_.insert(this->rx_buf_.end(), data, data + len);
   if (this->rx_buf_.size() > 2048)  // runaway guard
