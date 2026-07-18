@@ -85,10 +85,12 @@ void Concept2Component::loop() {
 
 #ifdef USE_ESP_IDF
 void Concept2Component::on_frame_(const uint8_t *data, size_t len) {
-  // Runs on the USB task. The PM may split a large CSAFE frame across multiple
-  // HID reports, so accumulate and extract complete F1..F2 frames before
-  // parsing. (A data byte 0xF2 is byte-stuffed, so the first raw 0xF2 after a
-  // start flag is always the real stop.)
+  uint32_t rawnow = millis();
+  if (rawnow - this->last_raw_log_ms_ >= 1000) {
+    this->last_raw_log_ms_ = rawnow;
+    ESP_LOGD(TAG, "raw rx %u bytes: %s", (unsigned) len,
+             format_hex_pretty(data, len < 40 ? len : 40).c_str());
+  }
   this->rx_buf_.insert(this->rx_buf_.end(), data, data + len);
   if (this->rx_buf_.size() > 2048)  // runaway guard
     this->rx_buf_.erase(this->rx_buf_.begin(), this->rx_buf_.end() - 512);

@@ -99,6 +99,7 @@ class Concept2Component : public PollingComponent {
   uint32_t last_log_ms_{0};
   uint32_t last_tx_log_ms_{0};
   uint32_t last_rx_log_ms_{0};
+  uint32_t last_raw_log_ms_{0};
   portMUX_TYPE mux_ = portMUX_INITIALIZER_UNLOCKED;
 
   // Locally derived session state.
