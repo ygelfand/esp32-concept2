@@ -10,7 +10,7 @@ CODEOWNERS = ["@ygelfand"]
 # registry we hook into; mdns is needed for DirCon discovery; sensor is
 # auto-loaded so the optional HA sensor platform is available.
 DEPENDENCIES = ["esp32"]
-AUTO_LOAD = ["esp32_ble", "esp32_ble_server", "mdns", "sensor"]
+AUTO_LOAD = ["esp32_ble", "esp32_ble_server", "mdns"]
 MULTI_CONF = False
 
 concept2_ns = cg.esphome_ns.namespace("concept2")
