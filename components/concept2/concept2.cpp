@@ -253,6 +253,7 @@ void Concept2Component::wake_() {
   }
   this->sleeping_ = false;
   this->last_activity_ms_ = millis();
+  this->set_active(true);  // wake is authoritative: resume polling + sync the switch
 }
 
 void Concept2Component::handle_taps_(uint8_t count) {
