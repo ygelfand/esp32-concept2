@@ -8,20 +8,24 @@ namespace {
 
 // Rotating poll blocks, each a small group of proprietary getters wrapped in
 // 0x1A. The caller cycles through them one per poll.
+// Proprietary getters (wrapped in 0x1A) that the PM4 answers reliably.
 const uint8_t BLK_TIME_DIST[] = {PM_GET_WORKTIME, PM_GET_WORKDISTANCE};
-const uint8_t BLK_PACE_POWER[] = {PM_GET_STROKE_500MPACE, PM_GET_STROKE_POWER};
-const uint8_t BLK_RATE_STATE[] = {PM_GET_STROKERATE, PM_GET_STROKESTATE};
-const uint8_t BLK_DRAG_WORKOUT[] = {PM_GET_DRAGFACTOR, PM_GET_WORKOUTSTATE};
+const uint8_t BLK_STATE_DRAG[] = {PM_GET_STROKESTATE, PM_GET_DRAGFACTOR, PM_GET_WORKOUTSTATE};
+// Public getters (sent bare) - the PM returns empty for the proprietary
+// pace/power/stroke-rate getters, so use the standard CSAFE ones.
+const uint8_t BLK_PUB_POWER_PACE_RATE[] = {CMD_GETPOWER, CMD_GETPACE, CMD_GETCADENCE};
+const uint8_t BLK_PUB_HR_CAL[] = {CMD_GETHRCUR, CMD_GETCALORIES};
 
 struct PollBlock {
   const uint8_t *cmds;
   uint8_t count;
+  bool proprietary;  // wrap in 0x1A when true, else send bare public commands
 };
 const PollBlock POLL_BLOCKS[] = {
-    {BLK_TIME_DIST, 2},
-    {BLK_PACE_POWER, 2},
-    {BLK_RATE_STATE, 2},
-    {BLK_DRAG_WORKOUT, 2},
+    {BLK_TIME_DIST, 2, true},
+    {BLK_PUB_POWER_PACE_RATE, 3, false},
+    {BLK_STATE_DRAG, 3, true},
+    {BLK_PUB_HR_CAL, 2, false},
 };
 const size_t NUM_POLL_BLOCKS = sizeof(POLL_BLOCKS) / sizeof(POLL_BLOCKS[0]);
 
@@ -160,8 +164,10 @@ size_t build_poll_frame(size_t block_index, uint8_t *out, size_t out_cap) {
   const PollBlock &b = POLL_BLOCKS[block_index % NUM_POLL_BLOCKS];
   uint8_t contents[16];
   size_t n = 0;
-  contents[n++] = CMD_PROP_WRAPPER;
-  contents[n++] = b.count;
+  if (b.proprietary) {
+    contents[n++] = CMD_PROP_WRAPPER;
+    contents[n++] = b.count;
+  }
   for (uint8_t i = 0; i < b.count; i++)
     contents[n++] = b.cmds[i];
   return build_frame(contents, n, out, out_cap);

@@ -98,14 +98,6 @@ void Concept2Component::loop() {
 
 #ifdef USE_ESP_IDF
 void Concept2Component::on_frame_(const uint8_t *data, size_t len) {
-  uint32_t rawnow = millis();
-  if (rawnow - this->last_raw_log_ms_ >= 1000) {
-    this->last_raw_log_ms_ = rawnow;
-    ESP_LOGD(TAG, "raw rx %u bytes:", (unsigned) len);
-    for (size_t off = 0; off < len; off += 32)
-      ESP_LOGD(TAG, "  [%02u] %s", (unsigned) off,
-               format_hex_pretty(data + off, (len - off) < 32 ? (len - off) : 32).c_str());
-  }
   size_t f1 = 0;
   while (f1 < len && data[f1] != csafe::FRAME_START_STD && data[f1] != csafe::FRAME_START_EXT)
     f1++;
