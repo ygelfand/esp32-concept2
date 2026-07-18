@@ -29,27 +29,39 @@ void Concept2Component::setup() {
 #endif
 }
 
-void Concept2Component::update() {
+void Concept2Component::update() {}
+
 #ifdef USE_ESP_IDF
-  if (!this->usb_.connected())
-    return;
+void Concept2Component::send_next_poll_() {
   uint8_t frame[96];
-  size_t n = csafe::build_poll_frame(this->poll_index_, frame, sizeof(frame));
+  size_t idx = this->poll_index_;
+  size_t n = csafe::build_poll_frame(idx, frame, sizeof(frame));
   this->poll_index_ = (this->poll_index_ + 1) % csafe::poll_block_count();
   if (n == 0)
     return;
   bool sent = this->usb_.write_frame(frame, n);
-  uint32_t now = millis();
-  if (now - this->last_tx_log_ms_ >= 1000) {
-    this->last_tx_log_ms_ = now;
-    ESP_LOGD(TAG, "poll TX %u bytes (sent=%d): %s", (unsigned) n, sent,
+  this->last_poll_ms_ = millis();
+  this->awaiting_ = true;
+  if (this->last_poll_ms_ - this->last_tx_log_ms_ >= 1000) {
+    this->last_tx_log_ms_ = this->last_poll_ms_;
+    ESP_LOGD(TAG, "poll[%u] TX %u bytes (sent=%d): %s", (unsigned) idx, (unsigned) n, sent,
              format_hex_pretty(frame, n).c_str());
   }
-#endif
 }
+#endif
 
 void Concept2Component::loop() {
 #ifdef USE_ESP_IDF
+  // Synchronous poll cycle: send the next block only once the previous reply has
+  // been parsed (awaiting_ cleared), honoring a min inter-frame gap; resend on
+  // timeout so a silent block can't stall the rotation.
+  if (this->usb_.connected()) {
+    uint32_t pn = millis();
+    if ((pn - this->last_poll_ms_ >= 50) &&
+        (!this->awaiting_ || (pn - this->last_poll_ms_ > 300)))
+      this->send_next_poll_();
+  }
+
   if (!this->have_new_)
     return;
 
@@ -118,6 +130,7 @@ void Concept2Component::on_frame_(const uint8_t *data, size_t len) {
     this->shared_metrics_ = this->parse_metrics_;
     this->have_new_ = true;
     portEXIT_CRITICAL(&this->mux_);
+    this->awaiting_ = false;  // reply received; loop() may send the next block
   }
 }
 
