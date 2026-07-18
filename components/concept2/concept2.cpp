@@ -1,6 +1,7 @@
 #include "concept2.h"
 
 #include "esphome/core/hal.h"
+#include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 
 #include "csafe.h"
@@ -34,8 +35,15 @@ void Concept2Component::update() {
     return;
   uint8_t frame[96];
   size_t n = csafe::build_poll_frame(frame, sizeof(frame));
-  if (n > 0)
-    this->usb_.write_frame(frame, n);
+  if (n == 0)
+    return;
+  bool sent = this->usb_.write_frame(frame, n);
+  uint32_t now = millis();
+  if (now - this->last_tx_log_ms_ >= 1000) {
+    this->last_tx_log_ms_ = now;
+    ESP_LOGD(TAG, "poll TX %u bytes (sent=%d): %s", (unsigned) n, sent,
+             format_hex_pretty(frame, n).c_str());
+  }
 #endif
 }
 
@@ -79,7 +87,14 @@ void Concept2Component::loop() {
 void Concept2Component::on_frame_(const uint8_t *data, size_t len) {
   // Runs on the USB task. Parse into the persistent target (keeps fields not
   // present in this frame), then hand a snapshot to the main loop.
-  if (!csafe::parse_response(data, len, this->parse_metrics_))
+  bool ok = csafe::parse_response(data, len, this->parse_metrics_);
+  uint32_t now = millis();
+  if (now - this->last_rx_log_ms_ >= 1000) {
+    this->last_rx_log_ms_ = now;
+    ESP_LOGD(TAG, "RX %u bytes parse=%s: %s", (unsigned) len, ok ? "OK" : "FAIL",
+             format_hex_pretty(data, len).c_str());
+  }
+  if (!ok)
     return;
   portENTER_CRITICAL(&this->mux_);
   this->shared_metrics_ = this->parse_metrics_;

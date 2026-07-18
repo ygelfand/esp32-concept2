@@ -71,14 +71,3 @@ async def to_code(config):
     # Newer ESPHome prunes unreferenced built-in IDF components; keep it in.
     if hasattr(esp32, "include_builtin_idf_component"):
         esp32.include_builtin_idf_component("usb_host")
-
-    # USB host tuning:
-    #  - HUBS_SUPPORTED lets you put a powered USB hub between the board and the
-    #    PM, which supplies clean VBUS + signal (best workaround for finicky
-    #    enumeration / boards that don't source VBUS on the native port).
-    #  - Longer reset hold/recovery gives slow full-speed devices more settle
-    #    time during enumeration.
-    esp32.add_idf_sdkconfig_option("CONFIG_USB_HOST_HUBS_SUPPORTED", True)
-    esp32.add_idf_sdkconfig_option("CONFIG_USB_HOST_DEBOUNCE_DELAY_MS", 2000)
-    esp32.add_idf_sdkconfig_option("CONFIG_USB_HOST_RESET_HOLD_MS", 50)
-    esp32.add_idf_sdkconfig_option("CONFIG_USB_HOST_RESET_RECOVERY_MS", 200)
