@@ -123,6 +123,7 @@ class Concept2Component : public PollingComponent {
   void wake_();
   void reset_workout_();
   void send_command_(uint8_t cmd);
+  void send_screenstate_(uint8_t type, uint8_t value);
 #endif
 #ifdef USE_LIGHT
   void update_status_led_();

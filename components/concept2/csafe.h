@@ -53,6 +53,14 @@ constexpr uint8_t CMD_GETPOWER = 0xB4;       // watts
 // Long wrapper command carrying Concept2 proprietary short commands.
 constexpr uint8_t CMD_PROP_WRAPPER = 0x1A;  // CSAFE_SETUSERCFG1
 
+// Proprietary SET wrapper + screen-state command (used to sleep the PM).
+constexpr uint8_t CMD_SETPMCFG = 0x76;                 // C2 proprietary SET wrapper
+constexpr uint8_t PM_SET_SCREENSTATE = 0x13;
+constexpr uint8_t SCREENTYPE_WORKOUT = 0x01;
+constexpr uint8_t SCREENTYPE_RACE = 0x02;
+constexpr uint8_t SCREENVALUE_PREPARETOSLEEP = 0x0A;   // race screen value 10
+constexpr uint8_t SCREENVALUE_GOTOMAINSCREEN = 0x06;   // workout screen value 6
+
 // Concept2 proprietary short "get" commands (carried inside CMD_PROP_WRAPPER).
 constexpr uint8_t PM_GET_WORKTIME = 0xA0;         // 4-byte @0.01s + 1 frac
 constexpr uint8_t PM_GET_WORKDISTANCE = 0xA3;     // 4-byte @0.1m + 1 frac

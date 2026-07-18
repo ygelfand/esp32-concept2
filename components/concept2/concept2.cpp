@@ -220,23 +220,31 @@ void Concept2Component::send_command_(uint8_t cmd) {
     this->usb_.write_frame(frame, n);
 }
 
+void Concept2Component::send_screenstate_(uint8_t type, uint8_t value) {
+  // F1 76 04 13 02 <type> <value> <cksum> F2  (0x76 = proprietary SET wrapper).
+  uint8_t contents[] = {csafe::CMD_SETPMCFG, 0x04, csafe::PM_SET_SCREENSTATE, 0x02, type, value};
+  uint8_t frame[16];
+  size_t n = csafe::build_frame(contents, sizeof(contents), frame, sizeof(frame));
+  if (n > 0)
+    this->usb_.write_frame(frame, n);
+}
+
 void Concept2Component::reset_workout_() {
   ESP_LOGI(TAG, "reset workout");
   this->send_command_(csafe::CMD_RESET);
 }
 
 void Concept2Component::enter_sleep_() {
-  ESP_LOGI(TAG, "sleep: finish + drop port");
-  this->send_command_(csafe::CMD_GOFINISHED);
-  this->usb_.set_bus_power(false);
+  ESP_LOGI(TAG, "sleep: SET_SCREENSTATE prepare-to-sleep");
+  this->send_screenstate_(csafe::SCREENTYPE_RACE, csafe::SCREENVALUE_PREPARETOSLEEP);
   this->sleeping_ = true;
 }
 
 void Concept2Component::wake_() {
-  ESP_LOGI(TAG, "wake: power port");
-  this->usb_.set_bus_power(true);
+  ESP_LOGI(TAG, "wake: go to main screen + resume");
   this->sleeping_ = false;
   this->last_activity_ms_ = millis();
+  this->send_screenstate_(csafe::SCREENTYPE_WORKOUT, csafe::SCREENVALUE_GOTOMAINSCREEN);
 }
 
 void Concept2Component::handle_taps_(uint8_t count) {
