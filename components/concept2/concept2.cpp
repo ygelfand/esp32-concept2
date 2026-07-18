@@ -61,22 +61,9 @@ void Concept2Component::loop() {
 #ifdef USE_ESP_IDF
   uint32_t nowm = millis();
 
-  // Multi-tap button: count debounced presses within a window, then act
-  // (1 = pause, 2 = reset workout, 3 = sleep, any tap while asleep = wake).
-  if (this->pause_button_ != nullptr) {
-    bool pressed = !this->pause_button_->digital_read();  // boot button is active-low
-    if (pressed && !this->button_prev_ && (nowm - this->last_button_ms_ > 60)) {
-      this->last_button_ms_ = nowm;
-      this->last_tap_ms_ = nowm;
-      this->last_activity_ms_ = nowm;
-      this->tap_count_++;
-    }
-    this->button_prev_ = pressed;
-    if (this->tap_count_ > 0 && (nowm - this->last_tap_ms_ > 400)) {
-      this->handle_taps_(this->tap_count_);
-      this->tap_count_ = 0;
-    }
-  }
+  // Button: single tap = pause/wake, double tap = reset, hold = sleep.
+  if (this->pause_button_ != nullptr)
+    this->handle_button_(nowm);
 
   // Track (re)connection so the sleep timer starts fresh when a PM attaches.
   bool conn = this->usb_.connected();
@@ -84,9 +71,11 @@ void Concept2Component::loop() {
     this->last_activity_ms_ = nowm;
   this->was_connected_ = conn;
 
-  // Auto-sleep: after the timeout with no rowing/button activity, drop the port.
+  // Auto-sleep: after the timeout with no rowing/button activity, sleep. Use a
+  // fresh millis() (not the loop-top nowm) so the delta can't underflow when
+  // last_activity_ms_ was just stamped by wake_ a few ms after nowm was captured.
   if (!this->sleeping_ && conn && this->sleep_timeout_ms_ > 0 &&
-      (nowm - this->last_activity_ms_ > this->sleep_timeout_ms_) &&
+      (millis() - this->last_activity_ms_ > this->sleep_timeout_ms_) &&
       (!this->active_ || this->autosleep_on_idle_))
     this->enter_sleep_();
 
@@ -225,8 +214,15 @@ void Concept2Component::send_command_(uint8_t cmd) {
 }
 
 void Concept2Component::reset_workout_() {
-  ESP_LOGI(TAG, "reset workout");
-  this->send_command_(csafe::CMD_RESET);
+  // CSAFE_RESET (0x81) only resets the comms state machine, not the erg's piece.
+  // Terminating a workout on the PM is a Finished -> Idle transition (what
+  // MENU/BACK does); send both short commands in one frame so they run in order.
+  ESP_LOGI(TAG, "reset workout (finish + idle)");
+  uint8_t contents[2] = {csafe::CMD_GOFINISHED, csafe::CMD_GOIDLE};
+  uint8_t frame[8];
+  size_t n = csafe::build_frame(contents, 2, frame, sizeof(frame));
+  if (n > 0)
+    this->usb_.write_frame(frame, n);
 }
 
 void Concept2Component::enter_sleep_() {
@@ -256,22 +252,52 @@ void Concept2Component::wake_() {
   this->set_active(true);  // wake is authoritative: resume polling + sync the switch
 }
 
-void Concept2Component::handle_taps_(uint8_t count) {
-  if (this->sleeping_) {
-    this->wake_();
-    return;
+void Concept2Component::handle_button_(uint32_t nowm) {
+  // Edge-debounced (~30 ms) press/release tracking. A press held past HOLD_MS is
+  // a "hold" (sleep, fired while still down); short presses accumulate into a
+  // 1-tap (pause/wake) or 2-tap (reset) once the multi-tap window closes.
+  static constexpr uint32_t DEBOUNCE_MS = 30;
+  static constexpr uint32_t HOLD_MS = 1500;
+  static constexpr uint32_t MULTI_MS = 350;
+
+  bool raw = !this->pause_button_->digital_read();  // boot button is active-low
+
+  if (raw != this->button_prev_ && (nowm - this->last_edge_ms_ > DEBOUNCE_MS)) {
+    this->last_edge_ms_ = nowm;
+    this->button_prev_ = raw;
+    this->last_activity_ms_ = nowm;
+    if (raw) {  // press down
+      this->press_start_ms_ = nowm;
+      this->hold_fired_ = false;
+      if (this->sleeping_) {  // any press wakes; consume it so it isn't a tap/hold
+        this->wake_();
+        this->hold_fired_ = true;
+        this->tap_count_ = 0;
+      }
+    } else if (!this->hold_fired_) {  // short release -> count a tap
+      this->tap_count_++;
+      this->last_release_ms_ = nowm;
+    }
   }
-  switch (count) {
-    case 1:
+
+  // Hold: fire once the button has been down past the threshold (immediate,
+  // before release) so the LED going off is the feedback.
+  if (this->button_prev_ && !this->hold_fired_ && (nowm - this->press_start_ms_ >= HOLD_MS)) {
+    this->hold_fired_ = true;
+    this->tap_count_ = 0;
+    if (!this->sleeping_)
+      this->enter_sleep_();
+  }
+
+  // Resolve taps once released and the multi-tap window has elapsed.
+  if (this->tap_count_ > 0 && !this->button_prev_ && (nowm - this->last_release_ms_ > MULTI_MS)) {
+    if (this->tap_count_ == 1) {
       this->toggle_active();
       ESP_LOGI(TAG, "polling %s", this->active_ ? "resumed" : "paused");
-      break;
-    case 2:
+    } else {  // 2+ taps
       this->reset_workout_();
-      break;
-    default:  // 3 or more taps
-      this->enter_sleep_();
-      break;
+    }
+    this->tap_count_ = 0;
   }
 }
 #endif  // USE_ESP_IDF

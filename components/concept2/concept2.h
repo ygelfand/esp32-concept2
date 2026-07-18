@@ -110,9 +110,11 @@ class Concept2Component : public PollingComponent {
   InternalGPIOPin *pause_button_{nullptr};
   GPIOPin *vbus_pin_{nullptr};
   bool button_prev_{false};
-  uint32_t last_button_ms_{0};
+  bool hold_fired_{false};
+  uint32_t press_start_ms_{0};
+  uint32_t last_edge_ms_{0};
+  uint32_t last_release_ms_{0};
   uint8_t tap_count_{0};
-  uint32_t last_tap_ms_{0};
   uint32_t last_activity_ms_{0};
   uint32_t sleep_timeout_ms_{120000};
   bool autosleep_on_idle_{true};
@@ -123,7 +125,7 @@ class Concept2Component : public PollingComponent {
   Concept2Switch *active_switch_{nullptr};
 #endif
 #ifdef USE_ESP_IDF
-  void handle_taps_(uint8_t count);
+  void handle_button_(uint32_t nowm);
   void enter_sleep_();
   void wake_();
   void reset_workout_();
