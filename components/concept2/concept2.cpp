@@ -105,7 +105,7 @@ void Concept2Component::loop() {
   uint32_t now = millis();
   if (now - this->last_log_ms_ >= 1000) {
     this->last_log_ms_ = now;
-    ESP_LOGD(TAG,
+    ESP_LOGV(TAG,
              "dist=%.1fm pace=%us/500m power=%dW rate=%.0fspm hr=%u cal=%u "
              "t=%us stroke=%u workout=%u drag=%u",
              m.total_distance_m, m.inst_pace_s500, m.inst_power_w, m.stroke_rate_spm,
@@ -193,32 +193,27 @@ void Concept2Component::update_derived_(RowingMetrics &m) {
 
 #ifdef USE_SENSOR
 void Concept2Component::publish_sensors_(const RowingMetrics &m) {
-  // Throttle HA sensor updates to ~1 Hz; the 10 Hz stream is only for FTMS.
+  // Throttle to ~1 Hz, and only publish a sensor when its value actually
+  // changed (no HA/log spam while idle). The 10 Hz stream is only for FTMS.
   uint32_t now = millis();
   if (now - this->last_sensor_pub_ms_ < 1000)
     return;
   this->last_sensor_pub_ms_ = now;
 
-  if (this->distance_sensor_ != nullptr)
-    this->distance_sensor_->publish_state(m.total_distance_m);
-  if (this->pace_sensor_ != nullptr)
-    this->pace_sensor_->publish_state(m.inst_pace_s500);
-  if (this->power_sensor_ != nullptr)
-    this->power_sensor_->publish_state(m.inst_power_w);
-  if (this->stroke_rate_sensor_ != nullptr)
-    this->stroke_rate_sensor_->publish_state(m.stroke_rate_spm);
-  if (this->stroke_count_sensor_ != nullptr)
-    this->stroke_count_sensor_->publish_state(m.stroke_count);
-  if (this->heart_rate_sensor_ != nullptr)
-    this->heart_rate_sensor_->publish_state(m.heart_rate_bpm);
-  if (this->calories_sensor_ != nullptr)
-    this->calories_sensor_->publish_state(m.total_energy_kcal);
-  if (this->elapsed_time_sensor_ != nullptr)
-    this->elapsed_time_sensor_->publish_state(m.elapsed_time_s);
-  if (this->drag_factor_sensor_ != nullptr)
-    this->drag_factor_sensor_->publish_state(m.drag_factor);
-  if (this->flywheel_sensor_ != nullptr)
-    this->flywheel_sensor_->publish_state(m.flywheel_rpm);
+  auto pub = [](sensor::Sensor *s, float v) {
+    if (s != nullptr && (!s->has_state() || s->state != v))
+      s->publish_state(v);
+  };
+  pub(this->distance_sensor_, m.total_distance_m);
+  pub(this->pace_sensor_, m.inst_pace_s500);
+  pub(this->power_sensor_, m.inst_power_w);
+  pub(this->stroke_rate_sensor_, m.stroke_rate_spm);
+  pub(this->stroke_count_sensor_, m.stroke_count);
+  pub(this->heart_rate_sensor_, m.heart_rate_bpm);
+  pub(this->calories_sensor_, m.total_energy_kcal);
+  pub(this->elapsed_time_sensor_, m.elapsed_time_s);
+  pub(this->drag_factor_sensor_, m.drag_factor);
+  pub(this->flywheel_sensor_, m.flywheel_rpm);
 }
 #endif  // USE_SENSOR
 
